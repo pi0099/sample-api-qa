@@ -1,9 +1,15 @@
+import {
+  inspectAccessToken,
+  parseAccessToken,
+} from '@/lib/oauth';
+
 export type TokenRejectReason =
   | 'missing_authorization'
   | 'invalid_bearer_format'
   | 'empty_token_after_bearer'
   | 'double_bearer_prefix'
-  | 'looks_like_jwt'
+  | 'invalid_jwt_format'
+  | 'invalid_signature'
   | 'decode_failed'
   | 'wrong_grant_type'
   | 'wrong_sub'
@@ -75,81 +81,82 @@ export function diagnoseAccessToken(
     };
   }
 
-  if (trimmedToken.split('.').length === 3) {
+  if (trimmedToken.split('.').length !== 3) {
     return {
-      reason: 'looks_like_jwt',
-      message: 'Token looks like JWT (3 dot-separated parts), not sample M2M token',
+      reason: 'invalid_jwt_format',
+      message: 'Token must be a JWT with 3 dot-separated parts',
       tokenLength: trimmedToken.length,
       tokenPreview: maskToken(trimmedToken),
     };
   }
 
-  let payload: {
-    sub?: string;
-    grant_type?: string;
-    exp?: number;
-  };
+  const inspection = inspectAccessToken(trimmedToken);
+  const payload = inspection.payload;
 
-  try {
-    payload = JSON.parse(
-      Buffer.from(trimmedToken, 'base64url').toString('utf8'),
-    ) as {
-      sub?: string;
-      grant_type?: string;
-      exp?: number;
-    };
-  } catch {
+  if (!payload) {
     return {
       reason: 'decode_failed',
-      message: 'Token is not valid base64url JSON payload',
+      message: 'JWT payload could not be decoded',
       tokenLength: trimmedToken.length,
       tokenPreview: maskToken(trimmedToken),
     };
   }
 
-  if (payload.grant_type !== 'client_credentials') {
+  if (parseAccessToken(trimmedToken)) {
     return {
-      reason: 'wrong_grant_type',
-      message: `Expected grant_type=client_credentials, got ${payload.grant_type ?? 'undefined'}`,
+      reason: 'valid',
+      message: 'Token is valid',
       tokenLength: trimmedToken.length,
       tokenPreview: maskToken(trimmedToken),
       decodedSub: payload.sub,
-      decodedGrantType: payload.grant_type,
+      decodedGrantType: payload.gty,
       decodedExp: payload.exp,
     };
   }
 
-  if (payload.sub !== 'test-m2m-client') {
-    return {
-      reason: 'wrong_sub',
-      message: `Expected sub=test-m2m-client, got ${payload.sub ?? 'undefined'}`,
-      tokenLength: trimmedToken.length,
-      tokenPreview: maskToken(trimmedToken),
-      decodedSub: payload.sub,
-      decodedGrantType: payload.grant_type,
-      decodedExp: payload.exp,
-    };
-  }
-
-  if (typeof payload.exp !== 'number' || payload.exp < Math.floor(Date.now() / 1000)) {
+  if (inspection.expired) {
     return {
       reason: 'expired',
       message: 'Token is expired',
       tokenLength: trimmedToken.length,
       tokenPreview: maskToken(trimmedToken),
       decodedSub: payload.sub,
-      decodedGrantType: payload.grant_type,
+      decodedGrantType: payload.gty,
+      decodedExp: payload.exp,
+    };
+  }
+
+  if (payload.gty !== 'client-credentials') {
+    return {
+      reason: 'wrong_grant_type',
+      message: `Expected gty=client-credentials, got ${payload.gty ?? 'undefined'}`,
+      tokenLength: trimmedToken.length,
+      tokenPreview: maskToken(trimmedToken),
+      decodedSub: payload.sub,
+      decodedGrantType: payload.gty,
+      decodedExp: payload.exp,
+    };
+  }
+
+  if (!inspection.allowedClient) {
+    return {
+      reason: 'wrong_sub',
+      message: `Expected client test-m2m-client, got sub=${payload.sub ?? 'undefined'}`,
+      tokenLength: trimmedToken.length,
+      tokenPreview: maskToken(trimmedToken),
+      decodedSub: payload.sub,
+      decodedGrantType: payload.gty,
       decodedExp: payload.exp,
     };
   }
 
   return {
-    reason: 'valid',
-    message: 'Token is valid',
+    reason: 'invalid_signature',
+    message: 'JWT signature is invalid or token was not issued by sample-api',
     tokenLength: trimmedToken.length,
     tokenPreview: maskToken(trimmedToken),
     decodedSub: payload.sub,
-    decodedGrantType: payload.grant_type,
+    decodedGrantType: payload.gty,
     decodedExp: payload.exp,
   };
 }

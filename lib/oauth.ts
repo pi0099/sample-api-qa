@@ -1,13 +1,11 @@
+import { decodeJwtPayload, signJwt, verifyJwt, type JwtPayload } from '@/lib/jwt';
+
 export const SAMPLE_CLIENT_ID = 'test-m2m-client';
 export const SAMPLE_CLIENT_SECRET = 'test-m2m-secret';
-export const SAMPLE_TOKEN_EXPIRES_IN = 3600;
-
-export interface AccessTokenPayload {
-  sub: string;
-  grant_type: 'client_credentials';
-  iat: number;
-  exp: number;
-}
+export const SAMPLE_TOKEN_EXPIRES_IN = 86400;
+export const SAMPLE_TOKEN_ISSUER = 'https://sample-api-qa.vercel.app';
+export const SAMPLE_JWT_SECRET =
+  process.env.OAUTH_JWT_SECRET ?? 'sample-api-qa-test-jwt-secret';
 
 export interface OAuthTokenResponse {
   access_token: string;
@@ -29,42 +27,67 @@ export function validateClientCredentials(
   );
 }
 
-export function createAccessToken(expiresIn: number = SAMPLE_TOKEN_EXPIRES_IN): string {
-  const now = Math.floor(Date.now() / 1000);
-  const payload: AccessTokenPayload = {
-    sub: SAMPLE_CLIENT_ID,
-    grant_type: 'client_credentials',
-    iat: now,
-    exp: now + expiresIn,
-  };
-
-  return Buffer.from(JSON.stringify(payload)).toString('base64url');
+export function isAllowedClientSubject(sub: string | undefined): boolean {
+  return (
+    sub === SAMPLE_CLIENT_ID || sub === `${SAMPLE_CLIENT_ID}@clients`
+  );
 }
 
-export function parseAccessToken(token: string): AccessTokenPayload | null {
-  const trimmedToken = token.trim();
+export function createAccessToken(
+  expiresIn: number = SAMPLE_TOKEN_EXPIRES_IN,
+): string {
+  const now = Math.floor(Date.now() / 1000);
+  const payload: JwtPayload = {
+    iss: SAMPLE_TOKEN_ISSUER,
+    sub: `${SAMPLE_CLIENT_ID}@clients`,
+    iat: now,
+    exp: now + expiresIn,
+    gty: 'client-credentials',
+    azp: SAMPLE_CLIENT_ID,
+  };
 
-  try {
-    const payload = JSON.parse(
-      Buffer.from(trimmedToken, 'base64url').toString('utf8'),
-    ) as AccessTokenPayload;
+  return signJwt(payload, SAMPLE_JWT_SECRET);
+}
 
-    if (
-      payload.grant_type !== 'client_credentials' ||
-      payload.sub !== SAMPLE_CLIENT_ID ||
-      typeof payload.sub !== 'string'
-    ) {
-      return null;
-    }
+export function parseAccessToken(token: string): JwtPayload | null {
+  const payload = verifyJwt(token, SAMPLE_JWT_SECRET);
 
-    if (payload.exp < Math.floor(Date.now() / 1000)) {
-      return null;
-    }
-
-    return payload;
-  } catch {
+  if (!payload) {
     return null;
   }
+
+  if (payload.gty !== 'client-credentials') {
+    return null;
+  }
+
+  if (!isAllowedClientSubject(payload.sub) && payload.azp !== SAMPLE_CLIENT_ID) {
+    return null;
+  }
+
+  return payload;
+}
+
+export function inspectAccessToken(token: string): {
+  payload: JwtPayload | null;
+  signatureValid: boolean;
+  expired: boolean;
+  allowedClient: boolean;
+} {
+  const trimmedToken = token.trim();
+  const payload = decodeJwtPayload(trimmedToken);
+  const verified = verifyJwt(trimmedToken, SAMPLE_JWT_SECRET);
+
+  return {
+    payload,
+    signatureValid: verified !== null,
+    expired:
+      payload !== null &&
+      typeof payload.exp === 'number' &&
+      payload.exp < Math.floor(Date.now() / 1000),
+    allowedClient:
+      payload !== null &&
+      (isAllowedClientSubject(payload.sub) || payload.azp === SAMPLE_CLIENT_ID),
+  };
 }
 
 export function oauthError(

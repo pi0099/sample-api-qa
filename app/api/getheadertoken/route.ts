@@ -65,19 +65,21 @@ export async function GET(request: Request): Promise<Response> {
   const accessToken = extractAccessToken(authorization);
 
   if (!parseAccessToken(accessToken)) {
+    const diagnosisAfterBearer = diagnoseAccessToken(authorization);
+
     logRequestEvent({
       endpoint,
       method: 'GET',
       request,
       status: 401,
-      outcome: diagnosis.reason,
+      outcome: diagnosisAfterBearer.reason,
       extra: {
-        tokenPreview: diagnosis.tokenPreview,
-        tokenLength: diagnosis.tokenLength,
-        debugMessage: diagnosis.message,
-        decodedSub: diagnosis.decodedSub,
-        decodedGrantType: diagnosis.decodedGrantType,
-        decodedExp: diagnosis.decodedExp,
+        tokenPreview: diagnosisAfterBearer.tokenPreview,
+        tokenLength: diagnosisAfterBearer.tokenLength,
+        debugMessage: diagnosisAfterBearer.message,
+        decodedSub: diagnosisAfterBearer.decodedSub,
+        decodedGrantType: diagnosisAfterBearer.decodedGrantType,
+        decodedExp: diagnosisAfterBearer.decodedExp,
       },
     });
 
@@ -89,13 +91,13 @@ export async function GET(request: Request): Promise<Response> {
         ...(debugEnabled
           ? {
               debug: {
-                reason: diagnosis.reason,
-                message: diagnosis.message,
-                tokenPreview: diagnosis.tokenPreview,
-                tokenLength: diagnosis.tokenLength,
-                decodedSub: diagnosis.decodedSub,
-                decodedGrantType: diagnosis.decodedGrantType,
-                decodedExp: diagnosis.decodedExp,
+                reason: diagnosisAfterBearer.reason,
+                message: diagnosisAfterBearer.message,
+                tokenPreview: diagnosisAfterBearer.tokenPreview,
+                tokenLength: diagnosisAfterBearer.tokenLength,
+                decodedSub: diagnosisAfterBearer.decodedSub,
+                decodedGrantType: diagnosisAfterBearer.decodedGrantType,
+                decodedExp: diagnosisAfterBearer.decodedExp,
               },
             }
           : {}),

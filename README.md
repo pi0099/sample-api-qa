@@ -20,21 +20,38 @@ OAuth2 token endpoint — **Client Credentials grant**.
 
 **Request** (`application/x-www-form-urlencoded` hoặc `application/json`):
 
+Chỉ cần `grant_type`, `client_id`, `client_secret` — **không cần** `audience` hay `scope`.
+
 ```bash
 curl -X POST https://sample-api-qa.vercel.app/api/oauth/token \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=client_credentials" \
-  -d "client_id=test-m2m-client" \
-  -d "client_secret=test-m2m-secret"
+  -H "Content-Type: application/json" \
+  -d '{
+    "grant_type": "client_credentials",
+    "client_id": "test-m2m-client",
+    "client_secret": "test-m2m-secret"
+  }'
 ```
 
-**Response 200:**
+**Response 200** (format giống Auth0, không có `scope`):
 
 ```json
 {
-  "access_token": "<token>",
+  "access_token": "eyJhbGciOiJIUzI1NiIs...<JWT 3 phần>",
   "token_type": "Bearer",
-  "expires_in": 3600
+  "expires_in": 86400
+}
+```
+
+`access_token` là **JWT** (HS256), payload mẫu:
+
+```json
+{
+  "iss": "https://sample-api-qa.vercel.app",
+  "sub": "test-m2m-client@clients",
+  "gty": "client-credentials",
+  "azp": "test-m2m-client",
+  "iat": 1782231074,
+  "exp": 1782317474
 }
 ```
 
@@ -103,28 +120,40 @@ Các `reason` có thể gặp:
 | `invalid_bearer_format` | Không bắt đầu bằng `Bearer ` |
 | `empty_token_after_bearer` | Sau `Bearer ` không có token |
 | `double_bearer_prefix` | Token bị `Bearer Bearer ...` |
-| `looks_like_jwt` | Gửi nhầm JWT (Privy/Auth0) |
-| `decode_failed` | Không decode được base64url JSON |
-| `wrong_sub` / `wrong_grant_type` | Token không phải của `test-m2m-client` |
+| `invalid_jwt_format` | Token không phải JWT 3 phần |
+| `invalid_signature` | JWT không do sample-api cấp (vd: Auth0 token) |
+| `wrong_sub` | Client trong token không phải test-m2m-client |
 | `expired` | Token hết hạn |
 
 ### Cách 2 — Xem log trên Vercel
 
-Mỗi request được ghi log JSON (token được mask). Chạy:
+Mỗi request được ghi log JSON (token được mask).
+
+**Lưu ý:** `vercel logs sample-api-qa` sẽ lỗi vì CLI hiểu đó là deployment URL, không phải project name.
 
 ```bash
 cd docs/qa/Sample_API
-vercel logs sample-api-qa --follow
+
+# Live stream (khuyên dùng)
+vercel logs https://sample-api-qa.vercel.app --follow
+
+# Xem log gần đây (không stream)
+vercel logs https://sample-api-qa.vercel.app --no-follow --expand
+
+# Hoặc từ thư mục project đã link .vercel
+vercel logs --follow
 ```
 
 Sau đó gọi lại tool/chatbot, xem log field `outcome`, `tokenPreview`, `debugMessage`.
+
+Hoặc xem trên web: [Vercel Dashboard → sample-api-qa → Logs](https://vercel.com/pi0099s-projects/sample-api-qa/logs)
 
 
 | Field | Value |
 |-------|-------|
 | `client_id` | `test-m2m-client` |
 | `client_secret` | `test-m2m-secret` |
-| `expires_in` | `3600` (giây) |
+| `expires_in` | `86400` (24h) |
 
 Override credentials is not supported — only `test-m2m-client` / `test-m2m-secret` are accepted.
 
