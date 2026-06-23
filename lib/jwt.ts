@@ -1,17 +1,28 @@
-import { createHmac, timingSafeEqual } from 'crypto';
+import { createSign, createVerify, randomUUID } from 'crypto';
+import {
+  EXPECTED_ACCESS_TOKEN_MAX_LENGTH,
+  EXPECTED_ACCESS_TOKEN_MIN_LENGTH,
+  SAMPLE_JWT_KID,
+  SAMPLE_RSA_PRIVATE_KEY,
+  SAMPLE_RSA_PUBLIC_KEY,
+} from '@/lib/rsa-keys';
 
 export interface JwtHeader {
-  alg: 'HS256';
+  alg: 'RS256';
   typ: 'JWT';
+  kid: string;
 }
 
 export interface JwtPayload {
   iss: string;
   sub: string;
+  aud: string;
   iat: number;
   exp: number;
   gty: 'client-credentials';
   azp: string;
+  scope: string;
+  sid: string;
 }
 
 function encodeBase64Url(value: string): string {
@@ -22,14 +33,27 @@ function decodeBase64Url(value: string): string {
   return Buffer.from(value, 'base64url').toString('utf8');
 }
 
-export function signJwt(payload: JwtPayload, secret: string): string {
-  const header: JwtHeader = { alg: 'HS256', typ: 'JWT' };
+export function isExpectedAccessTokenLength(token: string): boolean {
+  const length = token.trim().length;
+  return (
+    length >= EXPECTED_ACCESS_TOKEN_MIN_LENGTH &&
+    length <= EXPECTED_ACCESS_TOKEN_MAX_LENGTH
+  );
+}
+
+export function signJwt(payload: JwtPayload, privateKey: string): string {
+  const header: JwtHeader = {
+    alg: 'RS256',
+    typ: 'JWT',
+    kid: SAMPLE_JWT_KID,
+  };
   const encodedHeader = encodeBase64Url(JSON.stringify(header));
   const encodedPayload = encodeBase64Url(JSON.stringify(payload));
   const signingInput = `${encodedHeader}.${encodedPayload}`;
-  const signature = createHmac('sha256', secret)
+  const signature = createSign('RSA-SHA256')
     .update(signingInput)
-    .digest('base64url');
+    .sign(privateKey)
+    .toString('base64url');
 
   return `${signingInput}.${signature}`;
 }
@@ -48,7 +72,7 @@ export function decodeJwtPayload(token: string): JwtPayload | null {
   }
 }
 
-export function verifyJwt(token: string, secret: string): JwtPayload | null {
+export function verifyJwt(token: string, publicKey: string): JwtPayload | null {
   const parts = token.trim().split('.');
 
   if (parts.length !== 3) {
@@ -57,17 +81,12 @@ export function verifyJwt(token: string, secret: string): JwtPayload | null {
 
   const [encodedHeader, encodedPayload, signature] = parts;
   const signingInput = `${encodedHeader}.${encodedPayload}`;
-  const expectedSignature = createHmac('sha256', secret)
+  const signatureBuffer = Buffer.from(signature, 'base64url');
+  const isValid = createVerify('RSA-SHA256')
     .update(signingInput)
-    .digest('base64url');
+    .verify(publicKey, signatureBuffer);
 
-  const actualBuffer = Buffer.from(signature, 'utf8');
-  const expectedBuffer = Buffer.from(expectedSignature, 'utf8');
-
-  if (
-    actualBuffer.length !== expectedBuffer.length ||
-    !timingSafeEqual(actualBuffer, expectedBuffer)
-  ) {
+  if (!isValid) {
     return null;
   }
 
@@ -82,4 +101,15 @@ export function verifyJwt(token: string, secret: string): JwtPayload | null {
   }
 
   return payload;
+}
+
+export function createJwtSid(): string {
+  return randomUUID();
+}
+
+export function getSigningKeys(): { privateKey: string; publicKey: string } {
+  return {
+    privateKey: process.env.OAUTH_RSA_PRIVATE_KEY ?? SAMPLE_RSA_PRIVATE_KEY,
+    publicKey: process.env.OAUTH_RSA_PUBLIC_KEY ?? SAMPLE_RSA_PUBLIC_KEY,
+  };
 }

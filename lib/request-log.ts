@@ -9,6 +9,7 @@ export type TokenRejectReason =
   | 'empty_token_after_bearer'
   | 'double_bearer_prefix'
   | 'invalid_jwt_format'
+  | 'unexpected_token_length'
   | 'invalid_signature'
   | 'decode_failed'
   | 'wrong_grant_type'
@@ -91,6 +92,19 @@ export function diagnoseAccessToken(
   }
 
   const inspection = inspectAccessToken(trimmedToken);
+
+  if (!inspection.expectedLength) {
+    return {
+      reason: 'unexpected_token_length',
+      message: `Expected access token length about 796 chars (allowed 750-850), got ${trimmedToken.length}`,
+      tokenLength: trimmedToken.length,
+      tokenPreview: maskToken(trimmedToken),
+      decodedSub: inspection.payload?.sub,
+      decodedGrantType: inspection.payload?.gty,
+      decodedExp: inspection.payload?.exp,
+    };
+  }
+
   const payload = inspection.payload;
 
   if (!payload) {

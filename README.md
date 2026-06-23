@@ -36,24 +36,29 @@ curl -X POST https://sample-api-qa.vercel.app/api/oauth/token \
 
 ```json
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIs...<JWT 3 phần>",
+  "access_token": "eyJhbGciOiJSUzI1NiIs...<JWT ~796 chars>",
   "token_type": "Bearer",
   "expires_in": 86400
 }
 ```
 
-`access_token` là **JWT** (HS256), payload mẫu:
+`access_token` là **JWT RS256** (~796 ký tự, 2 dấu `.`), payload mẫu:
 
 ```json
 {
-  "iss": "https://sample-api-qa.vercel.app",
+  "iss": "https://sample-api-qa.vercel.app/",
   "sub": "test-m2m-client@clients",
+  "aud": "https://sample-api-qa.vercel.app/api/v2/",
   "gty": "client-credentials",
   "azp": "test-m2m-client",
+  "scope": "read:users",
+  "sid": "<uuid>",
   "iat": 1782231074,
   "exp": 1782317474
 }
 ```
+
+> `scope` chỉ nằm **trong JWT payload**, không có field `scope` ở JSON response.
 
 **Errors (OAuth2 standard):**
 
@@ -120,7 +125,7 @@ Các `reason` có thể gặp:
 | `invalid_bearer_format` | Không bắt đầu bằng `Bearer ` |
 | `empty_token_after_bearer` | Sau `Bearer ` không có token |
 | `double_bearer_prefix` | Token bị `Bearer Bearer ...` |
-| `invalid_jwt_format` | Token không phải JWT 3 phần |
+| `unexpected_token_length` | Token không ~796 chars (allowed 750-850) |
 | `invalid_signature` | JWT không do sample-api cấp (vd: Auth0 token) |
 | `wrong_sub` | Client trong token không phải test-m2m-client |
 | `expired` | Token hết hạn |

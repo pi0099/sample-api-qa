@@ -1,11 +1,18 @@
-import { decodeJwtPayload, signJwt, verifyJwt, type JwtPayload } from '@/lib/jwt';
+import {
+  createJwtSid,
+  decodeJwtPayload,
+  getSigningKeys,
+  isExpectedAccessTokenLength,
+  signJwt,
+  verifyJwt,
+  type JwtPayload,
+} from '@/lib/jwt';
 
 export const SAMPLE_CLIENT_ID = 'test-m2m-client';
 export const SAMPLE_CLIENT_SECRET = 'test-m2m-secret';
 export const SAMPLE_TOKEN_EXPIRES_IN = 86400;
-export const SAMPLE_TOKEN_ISSUER = 'https://sample-api-qa.vercel.app';
-export const SAMPLE_JWT_SECRET =
-  process.env.OAUTH_JWT_SECRET ?? 'sample-api-qa-test-jwt-secret';
+export const SAMPLE_TOKEN_ISSUER = 'https://sample-api-qa.vercel.app/';
+export const SAMPLE_TOKEN_AUDIENCE = 'https://sample-api-qa.vercel.app/api/v2/';
 
 export interface OAuthTokenResponse {
   access_token: string;
@@ -40,17 +47,28 @@ export function createAccessToken(
   const payload: JwtPayload = {
     iss: SAMPLE_TOKEN_ISSUER,
     sub: `${SAMPLE_CLIENT_ID}@clients`,
+    aud: SAMPLE_TOKEN_AUDIENCE,
     iat: now,
     exp: now + expiresIn,
     gty: 'client-credentials',
     azp: SAMPLE_CLIENT_ID,
+    scope: 'read:users',
+    sid: createJwtSid(),
   };
 
-  return signJwt(payload, SAMPLE_JWT_SECRET);
+  const { privateKey } = getSigningKeys();
+  return signJwt(payload, privateKey);
 }
 
 export function parseAccessToken(token: string): JwtPayload | null {
-  const payload = verifyJwt(token, SAMPLE_JWT_SECRET);
+  const trimmedToken = token.trim();
+
+  if (!isExpectedAccessTokenLength(trimmedToken)) {
+    return null;
+  }
+
+  const { publicKey } = getSigningKeys();
+  const payload = verifyJwt(trimmedToken, publicKey);
 
   if (!payload) {
     return null;
@@ -72,10 +90,12 @@ export function inspectAccessToken(token: string): {
   signatureValid: boolean;
   expired: boolean;
   allowedClient: boolean;
+  expectedLength: boolean;
 } {
   const trimmedToken = token.trim();
   const payload = decodeJwtPayload(trimmedToken);
-  const verified = verifyJwt(trimmedToken, SAMPLE_JWT_SECRET);
+  const { publicKey } = getSigningKeys();
+  const verified = verifyJwt(trimmedToken, publicKey);
 
   return {
     payload,
@@ -87,6 +107,7 @@ export function inspectAccessToken(token: string): {
     allowedClient:
       payload !== null &&
       (isAllowedClientSubject(payload.sub) || payload.azp === SAMPLE_CLIENT_ID),
+    expectedLength: isExpectedAccessTokenLength(trimmedToken),
   };
 }
 
