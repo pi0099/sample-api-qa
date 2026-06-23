@@ -5,6 +5,7 @@ import {
   SAMPLE_TOKEN_EXPIRES_IN,
   validateClientCredentials,
 } from '@/lib/oauth';
+import { isQaDebugEnabled, logRequestEvent, maskToken } from '@/lib/request-log';
 
 interface TokenRequestBody {
   grant_type?: string;
@@ -30,17 +31,41 @@ async function parseTokenRequest(request: Request): Promise<TokenRequestBody> {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const endpoint = '/api/oauth/token';
   let body: TokenRequestBody;
 
   try {
     body = await parseTokenRequest(request);
   } catch {
+    logRequestEvent({
+      endpoint,
+      method: 'POST',
+      request,
+      status: 400,
+      outcome: 'parse_body_failed',
+    });
+
     return withCors(
       oauthError('invalid_request', 'Unable to parse token request body', 400),
     );
   }
 
+  const clientId = body.client_id?.trim();
+  const clientSecret = body.client_secret?.trim();
+
   if (body.grant_type !== 'client_credentials') {
+    logRequestEvent({
+      endpoint,
+      method: 'POST',
+      request,
+      status: 400,
+      outcome: 'unsupported_grant_type',
+      extra: {
+        grantType: body.grant_type,
+        clientId,
+      },
+    });
+
     return withCors(
       oauthError(
         'unsupported_grant_type',
@@ -50,10 +75,19 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const clientId = body.client_id?.trim();
-  const clientSecret = body.client_secret?.trim();
-
   if (!clientId || !clientSecret) {
+    logRequestEvent({
+      endpoint,
+      method: 'POST',
+      request,
+      status: 400,
+      outcome: 'missing_client_credentials',
+      extra: {
+        clientId,
+        hasClientSecret: Boolean(clientSecret),
+      },
+    });
+
     return withCors(
       oauthError(
         'invalid_request',
@@ -64,12 +98,37 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   if (!validateClientCredentials(clientId, clientSecret)) {
+    logRequestEvent({
+      endpoint,
+      method: 'POST',
+      request,
+      status: 401,
+      outcome: 'invalid_client',
+      extra: {
+        clientId,
+        clientSecretPreview: maskToken(clientSecret),
+      },
+    });
+
     return withCors(
       oauthError('invalid_client', 'Client authentication failed', 401),
     );
   }
 
   const accessToken = createAccessToken(SAMPLE_TOKEN_EXPIRES_IN);
+
+  logRequestEvent({
+    endpoint,
+    method: 'POST',
+    request,
+    status: 200,
+    outcome: 'token_issued',
+    extra: {
+      clientId,
+      accessTokenPreview: maskToken(accessToken),
+      expiresIn: SAMPLE_TOKEN_EXPIRES_IN,
+    },
+  });
 
   return withCors(
     Response.json({

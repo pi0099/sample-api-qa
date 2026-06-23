@@ -68,7 +68,57 @@ curl -H "Authorization: Bearer <access_token>" \
 
 **Response 401** — thiếu hoặc sai format header.
 
-## Test credentials mặc định
+## Debug request lỗi (không cần BE tool code)
+
+### Cách 1 — Bật debug trong response
+
+Gửi thêm header `X-QA-Debug: 1` khi gọi `getheadertoken`. API sẽ trả thêm field `debug` giải thích lỗi:
+
+```bash
+curl -s -H "Authorization: Bearer <token>" \
+  -H "X-QA-Debug: 1" \
+  https://sample-api-qa.vercel.app/api/getheadertoken
+```
+
+Ví dụ response lỗi:
+
+```json
+{
+  "error": "invalid_token",
+  "error_description": "Access token is invalid, expired, or not issued for test-m2m-client",
+  "debug": {
+    "reason": "looks_like_jwt",
+    "message": "Token looks like JWT (3 dot-separated parts), not sample M2M token",
+    "tokenPreview": "eyJhbGci...W8 [len=120]",
+    "tokenLength": 120
+  }
+}
+```
+
+Các `reason` có thể gặp:
+
+| reason | Ý nghĩa |
+|--------|---------|
+| `missing_authorization` | Không có header Authorization |
+| `invalid_bearer_format` | Không bắt đầu bằng `Bearer ` |
+| `empty_token_after_bearer` | Sau `Bearer ` không có token |
+| `double_bearer_prefix` | Token bị `Bearer Bearer ...` |
+| `looks_like_jwt` | Gửi nhầm JWT (Privy/Auth0) |
+| `decode_failed` | Không decode được base64url JSON |
+| `wrong_sub` / `wrong_grant_type` | Token không phải của `test-m2m-client` |
+| `expired` | Token hết hạn |
+
+### Cách 2 — Xem log trên Vercel
+
+Mỗi request được ghi log JSON (token được mask). Chạy:
+
+```bash
+cd docs/qa/Sample_API
+vercel logs sample-api-qa --follow
+```
+
+Sau đó gọi lại tool/chatbot, xem log field `outcome`, `tokenPreview`, `debugMessage`.
+
 
 | Field | Value |
 |-------|-------|

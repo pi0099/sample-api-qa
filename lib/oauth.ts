@@ -42,9 +42,11 @@ export function createAccessToken(expiresIn: number = SAMPLE_TOKEN_EXPIRES_IN): 
 }
 
 export function parseAccessToken(token: string): AccessTokenPayload | null {
+  const trimmedToken = token.trim();
+
   try {
     const payload = JSON.parse(
-      Buffer.from(token, 'base64url').toString('utf8'),
+      Buffer.from(trimmedToken, 'base64url').toString('utf8'),
     ) as AccessTokenPayload;
 
     if (
