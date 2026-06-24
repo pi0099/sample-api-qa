@@ -254,24 +254,36 @@ curl -X POST "https://sample-api-qa.vercel.app/api/orderinfo" \
 
 ## MCP tool: `get_order_info`
 
-Local MCP server for Cursor/chatbot testing.
+Tool trả về order info giống `/api/orderinfo`. Có **2 cách** chạy MCP:
 
-### Install
+| Cách | Khi nào dùng |
+|------|----------------|
+| **Remote (Vercel)** | Gọi từ máy khác, ngoài mạng — khuyên dùng |
+| **Local (stdio)** | Dev trên máy có source code |
 
-```bash
-cd docs/qa/Sample_API
-npm install
+### Remote MCP trên Vercel (gọi từ máy khác)
+
+Endpoint MCP (Streamable HTTP):
+
+```
+https://sample-api-qa.vercel.app/api/mcp
 ```
 
-### Run MCP server
+**Cursor / Claude Desktop** — thêm vào `~/.cursor/mcp.json` (hoặc Claude config):
 
-```bash
-npm run mcp:orderinfo
+```json
+{
+  "mcpServers": {
+    "sample-api-orderinfo": {
+      "url": "https://sample-api-qa.vercel.app/api/mcp"
+    }
+  }
+}
 ```
 
-### Cursor config
+Restart Cursor → Settings → MCP → `sample-api-orderinfo` phải **connected**.
 
-Add to Cursor MCP settings (update the absolute path if needed):
+**Nếu client chỉ hỗ trợ stdio** — dùng bridge `mcp-remote`:
 
 ```json
 {
@@ -279,8 +291,45 @@ Add to Cursor MCP settings (update the absolute path if needed):
     "sample-api-orderinfo": {
       "command": "npx",
       "args": [
+        "-y",
+        "mcp-remote",
+        "https://sample-api-qa.vercel.app/api/mcp"
+      ]
+    }
+  }
+}
+```
+
+**Test bằng MCP Inspector (local hoặc remote):**
+
+```bash
+cd docs/qa/Sample_API
+npm run dev
+npx @modelcontextprotocol/inspector
+```
+
+- Transport: **Streamable HTTP**
+- URL: `http://localhost:3000/api/mcp` (local) hoặc `https://sample-api-qa.vercel.app/api/mcp` (prod)
+- Connect → List Tools → gọi `get_order_info` với `{"userId":"alice"}`
+
+### Local MCP (stdio, dev only)
+
+```bash
+cd docs/qa/Sample_API
+npm install
+npm run mcp:orderinfo
+```
+
+Cursor config (chỉ máy có source code):
+
+```json
+{
+  "mcpServers": {
+    "sample-api-orderinfo-local": {
+      "command": "npx",
+      "args": [
         "tsx",
-        "/Users/nhauyen/Axis/stss/docs/qa/Sample_API/mcp-server/index.ts"
+        "/absolute/path/to/Sample_API/mcp-server/index.ts"
       ]
     }
   }
