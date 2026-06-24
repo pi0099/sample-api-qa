@@ -13,17 +13,33 @@ export interface JwtHeader {
   kid: string;
 }
 
-export interface JwtPayload {
+export interface AccessTokenPayload {
   iss: string;
   sub: string;
-  aud: string;
+  aud: string | string[];
   iat: number;
   exp: number;
+  gty?: string;
+  azp?: string;
+  scope?: string;
+  sid?: string;
+}
+
+export interface JwtHeaderDecoded {
+  alg: string;
+  typ?: string;
+  kid?: string;
+}
+
+export interface SampleJwtPayload extends AccessTokenPayload {
+  aud: string;
   gty: 'client-credentials';
   azp: string;
   scope: string;
   sid: string;
 }
+
+export type JwtPayload = SampleJwtPayload;
 
 function encodeBase64Url(value: string): string {
   return Buffer.from(value, 'utf8').toString('base64url');
@@ -41,7 +57,7 @@ export function isExpectedAccessTokenLength(token: string): boolean {
   );
 }
 
-export function signJwt(payload: JwtPayload, privateKey: string): string {
+export function signJwt(payload: SampleJwtPayload, privateKey: string): string {
   const header: JwtHeader = {
     alg: 'RS256',
     typ: 'JWT',
@@ -58,7 +74,7 @@ export function signJwt(payload: JwtPayload, privateKey: string): string {
   return `${signingInput}.${signature}`;
 }
 
-export function decodeJwtPayload(token: string): JwtPayload | null {
+export function decodeJwtHeader(token: string): JwtHeaderDecoded | null {
   const parts = token.trim().split('.');
 
   if (parts.length !== 3) {
@@ -66,13 +82,27 @@ export function decodeJwtPayload(token: string): JwtPayload | null {
   }
 
   try {
-    return JSON.parse(decodeBase64Url(parts[1])) as JwtPayload;
+    return JSON.parse(decodeBase64Url(parts[0])) as JwtHeaderDecoded;
   } catch {
     return null;
   }
 }
 
-export function verifyJwt(token: string, publicKey: string): JwtPayload | null {
+export function decodeJwtPayload(token: string): AccessTokenPayload | null {
+  const parts = token.trim().split('.');
+
+  if (parts.length !== 3) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(decodeBase64Url(parts[1])) as AccessTokenPayload;
+  } catch {
+    return null;
+  }
+}
+
+export function verifyJwt(token: string, publicKey: string): SampleJwtPayload | null {
   const parts = token.trim().split('.');
 
   if (parts.length !== 3) {
@@ -100,7 +130,11 @@ export function verifyJwt(token: string, publicKey: string): JwtPayload | null {
     return null;
   }
 
-  return payload;
+  if (payload.gty !== 'client-credentials') {
+    return null;
+  }
+
+  return payload as SampleJwtPayload;
 }
 
 export function createJwtSid(): string {

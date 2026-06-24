@@ -90,6 +90,34 @@ curl -H "Authorization: Bearer <access_token>" \
 
 **Response 401** — thiếu hoặc sai format header.
 
+### Auth0 token (optional)
+
+`/api/getheadertoken` chấp nhận **cả hai** loại token:
+
+1. Token do Sample API cấp (`POST /api/oauth/token`)
+2. Token **Auth0 M2M** (JWT RS256) — khi đã set env trên Vercel
+
+**Env trên Vercel:**
+
+| Variable | Ví dụ |
+|----------|--------|
+| `AUTH0_DOMAIN` | `dev-ypchc5lcafidxfot.us.auth0.com` |
+| `AUTH0_AUDIENCE` | `https://dev-ypchc5lcafidxfot.us.auth0.com/api/v2/` |
+| `AUTH0_ALLOWED_CLIENT_IDS` | `9iRZSYd9RctbwlYmDUFHGq79tdEV255b6` |
+
+`AUTH0_AUDIENCE` và `AUTH0_ALLOWED_CLIENT_IDS` phải **khớp chính xác** với JWT từ Auth0 (decode trên jwt.io để kiểm tra `aud`, `sub`, `azp`).
+
+Sau khi set env → **redeploy** Vercel. Chatbot có thể giữ nguyên flow lấy token từ Auth0.
+
+```bash
+# Token Auth0 (từ chatbot) — gọi thẳng getheadertoken
+curl -H "Authorization: Bearer <auth0_access_token>" \
+  -H "X-QA-Debug: 1" \
+  https://sample-api-qa.vercel.app/api/getheadertoken
+```
+
+Xem `env.example` trong repo.
+
 ## Debug request lỗi (không cần BE tool code)
 
 ### Cách 1 — Bật debug trong response

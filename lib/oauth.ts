@@ -5,8 +5,14 @@ import {
   isExpectedAccessTokenLength,
   signJwt,
   verifyJwt,
-  type JwtPayload,
+  type AccessTokenPayload,
+  type SampleJwtPayload,
 } from '@/lib/jwt';
+import { getAuth0Config } from '@/lib/auth0-config';
+import {
+  isAuth0AccessTokenPayload,
+  verifyAuth0AccessToken,
+} from '@/lib/auth0-jwks';
 
 export const SAMPLE_CLIENT_ID = 'test-m2m-client';
 export const SAMPLE_CLIENT_SECRET = 'test-m2m-secret';
@@ -44,7 +50,7 @@ export function createAccessToken(
   expiresIn: number = SAMPLE_TOKEN_EXPIRES_IN,
 ): string {
   const now = Math.floor(Date.now() / 1000);
-  const payload: JwtPayload = {
+  const payload: SampleJwtPayload = {
     iss: SAMPLE_TOKEN_ISSUER,
     sub: `${SAMPLE_CLIENT_ID}@clients`,
     aud: SAMPLE_TOKEN_AUDIENCE,
@@ -60,7 +66,7 @@ export function createAccessToken(
   return signJwt(payload, privateKey);
 }
 
-export function parseAccessToken(token: string): JwtPayload | null {
+export function parseSampleAccessToken(token: string): SampleJwtPayload | null {
   const trimmedToken = token.trim();
 
   if (!isExpectedAccessTokenLength(trimmedToken)) {
@@ -74,10 +80,6 @@ export function parseAccessToken(token: string): JwtPayload | null {
     return null;
   }
 
-  if (payload.gty !== 'client-credentials') {
-    return null;
-  }
-
   if (!isAllowedClientSubject(payload.sub) && payload.azp !== SAMPLE_CLIENT_ID) {
     return null;
   }
@@ -85,8 +87,26 @@ export function parseAccessToken(token: string): JwtPayload | null {
   return payload;
 }
 
-export function inspectAccessToken(token: string): {
-  payload: JwtPayload | null;
+export async function parseAccessToken(
+  token: string,
+): Promise<AccessTokenPayload | null> {
+  const sampleToken = parseSampleAccessToken(token);
+
+  if (sampleToken) {
+    return sampleToken;
+  }
+
+  const auth0Config = getAuth0Config();
+
+  if (!auth0Config) {
+    return null;
+  }
+
+  return verifyAuth0AccessToken(token, auth0Config);
+}
+
+export function inspectSampleAccessToken(token: string): {
+  payload: AccessTokenPayload | null;
   signatureValid: boolean;
   expired: boolean;
   allowedClient: boolean;
@@ -108,6 +128,50 @@ export function inspectAccessToken(token: string): {
       payload !== null &&
       (isAllowedClientSubject(payload.sub) || payload.azp === SAMPLE_CLIENT_ID),
     expectedLength: isExpectedAccessTokenLength(trimmedToken),
+  };
+}
+
+export async function inspectAccessToken(token: string): Promise<{
+  payload: AccessTokenPayload | null;
+  signatureValid: boolean;
+  expired: boolean;
+  allowedClient: boolean;
+  expectedLength: boolean;
+  tokenSource: 'sample' | 'auth0' | 'unknown';
+}> {
+  const trimmedToken = token.trim();
+  const sampleInspection = inspectSampleAccessToken(trimmedToken);
+
+  if (parseSampleAccessToken(trimmedToken)) {
+    return {
+      ...sampleInspection,
+      tokenSource: 'sample',
+    };
+  }
+
+  const auth0Config = getAuth0Config();
+  const payload = decodeJwtPayload(trimmedToken);
+
+  if (!auth0Config || !payload) {
+    return {
+      ...sampleInspection,
+      tokenSource: 'unknown',
+    };
+  }
+
+  const auth0ClaimsValid = isAuth0AccessTokenPayload(payload, auth0Config);
+  const verified = auth0ClaimsValid
+    ? await verifyAuth0AccessToken(trimmedToken, auth0Config)
+    : null;
+
+  return {
+    payload,
+    signatureValid: verified !== null,
+    expired:
+      payload.exp < Math.floor(Date.now() / 1000),
+    allowedClient: auth0ClaimsValid,
+    expectedLength: isExpectedAccessTokenLength(trimmedToken),
+    tokenSource: verified ? 'auth0' : 'unknown',
   };
 }
 

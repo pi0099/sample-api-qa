@@ -1,7 +1,11 @@
+import { getAuth0Config, isAuth0Issuer } from '@/lib/auth0-config';
+import { isAuth0AccessTokenPayload } from '@/lib/auth0-jwks';
 import {
   inspectAccessToken,
   parseAccessToken,
+  parseSampleAccessToken,
 } from '@/lib/oauth';
+import { decodeJwtPayload } from '@/lib/jwt';
 
 export type TokenRejectReason =
   | 'missing_authorization'
@@ -14,6 +18,9 @@ export type TokenRejectReason =
   | 'decode_failed'
   | 'wrong_grant_type'
   | 'wrong_sub'
+  | 'wrong_issuer'
+  | 'wrong_audience'
+  | 'auth0_not_configured'
   | 'expired'
   | 'valid';
 
@@ -25,6 +32,8 @@ export interface TokenDiagnosis {
   decodedSub?: string;
   decodedGrantType?: string;
   decodedExp?: number;
+  decodedIss?: string;
+  tokenSource?: 'sample' | 'auth0' | 'unknown';
 }
 
 export function maskToken(token: string): string {
@@ -40,9 +49,17 @@ export function isQaDebugEnabled(request: Request): boolean {
   return request.headers.get('x-qa-debug') === '1';
 }
 
-export function diagnoseAccessToken(
+function looksLikeAuth0Token(issuer: string | undefined): boolean {
+  if (!issuer) {
+    return false;
+  }
+
+  return issuer.includes('auth0.com');
+}
+
+export async function diagnoseAccessToken(
   authorization: string | null,
-): TokenDiagnosis {
+): Promise<TokenDiagnosis> {
   if (!authorization) {
     return {
       reason: 'missing_authorization',
@@ -91,7 +108,8 @@ export function diagnoseAccessToken(
     };
   }
 
-  const inspection = inspectAccessToken(trimmedToken);
+  const inspection = await inspectAccessToken(trimmedToken);
+  const payload = inspection.payload ?? decodeJwtPayload(trimmedToken);
 
   if (!inspection.expectedLength) {
     return {
@@ -99,13 +117,13 @@ export function diagnoseAccessToken(
       message: `Expected access token length about 796 chars (allowed 750-850), got ${trimmedToken.length}`,
       tokenLength: trimmedToken.length,
       tokenPreview: maskToken(trimmedToken),
-      decodedSub: inspection.payload?.sub,
-      decodedGrantType: inspection.payload?.gty,
-      decodedExp: inspection.payload?.exp,
+      decodedSub: payload?.sub,
+      decodedGrantType: payload?.gty,
+      decodedExp: payload?.exp,
+      decodedIss: payload?.iss,
+      tokenSource: inspection.tokenSource,
     };
   }
-
-  const payload = inspection.payload;
 
   if (!payload) {
     return {
@@ -116,7 +134,9 @@ export function diagnoseAccessToken(
     };
   }
 
-  if (parseAccessToken(trimmedToken)) {
+  const parsed = await parseAccessToken(trimmedToken);
+
+  if (parsed) {
     return {
       reason: 'valid',
       message: 'Token is valid',
@@ -125,6 +145,8 @@ export function diagnoseAccessToken(
       decodedSub: payload.sub,
       decodedGrantType: payload.gty,
       decodedExp: payload.exp,
+      decodedIss: payload.iss,
+      tokenSource: inspection.tokenSource,
     };
   }
 
@@ -137,7 +159,70 @@ export function diagnoseAccessToken(
       decodedSub: payload.sub,
       decodedGrantType: payload.gty,
       decodedExp: payload.exp,
+      decodedIss: payload.iss,
+      tokenSource: inspection.tokenSource,
     };
+  }
+
+  if (looksLikeAuth0Token(payload.iss)) {
+    const auth0Config = getAuth0Config();
+
+    if (!auth0Config) {
+      return {
+        reason: 'auth0_not_configured',
+        message:
+          'Token is from Auth0 but AUTH0_DOMAIN/AUTH0_AUDIENCE/AUTH0_ALLOWED_CLIENT_IDS are not configured',
+        tokenLength: trimmedToken.length,
+        tokenPreview: maskToken(trimmedToken),
+        decodedSub: payload.sub,
+        decodedGrantType: payload.gty,
+        decodedExp: payload.exp,
+        decodedIss: payload.iss,
+        tokenSource: 'auth0',
+      };
+    }
+
+    if (!isAuth0Issuer(payload.iss, auth0Config)) {
+      return {
+        reason: 'wrong_issuer',
+        message: `Expected Auth0 issuer ${auth0Config.issuer}, got ${payload.iss}`,
+        tokenLength: trimmedToken.length,
+        tokenPreview: maskToken(trimmedToken),
+        decodedSub: payload.sub,
+        decodedGrantType: payload.gty,
+        decodedExp: payload.exp,
+        decodedIss: payload.iss,
+        tokenSource: 'auth0',
+      };
+    }
+
+    if (!isAuth0AccessTokenPayload(payload, auth0Config)) {
+      if (payload.gty !== 'client-credentials') {
+        return {
+          reason: 'wrong_grant_type',
+          message: `Expected gty=client-credentials, got ${payload.gty ?? 'undefined'}`,
+          tokenLength: trimmedToken.length,
+          tokenPreview: maskToken(trimmedToken),
+          decodedSub: payload.sub,
+          decodedGrantType: payload.gty,
+          decodedExp: payload.exp,
+          decodedIss: payload.iss,
+          tokenSource: 'auth0',
+        };
+      }
+
+      return {
+        reason: 'wrong_audience',
+        message: `Auth0 audience or client is not allowed (expected aud=${auth0Config.audience})`,
+        tokenLength: trimmedToken.length,
+        tokenPreview: maskToken(trimmedToken),
+        decodedSub: payload.sub,
+        decodedGrantType: payload.gty,
+        decodedExp: payload.exp,
+        decodedIss: payload.iss,
+        tokenSource: 'auth0',
+      };
+    }
   }
 
   if (payload.gty !== 'client-credentials') {
@@ -149,29 +234,36 @@ export function diagnoseAccessToken(
       decodedSub: payload.sub,
       decodedGrantType: payload.gty,
       decodedExp: payload.exp,
+      decodedIss: payload.iss,
+      tokenSource: inspection.tokenSource,
     };
   }
 
-  if (!inspection.allowedClient) {
+  if (!parseSampleAccessToken(trimmedToken) && !inspection.allowedClient) {
     return {
       reason: 'wrong_sub',
-      message: `Expected client test-m2m-client, got sub=${payload.sub ?? 'undefined'}`,
+      message: `Expected client test-m2m-client or configured Auth0 client, got sub=${payload.sub ?? 'undefined'}`,
       tokenLength: trimmedToken.length,
       tokenPreview: maskToken(trimmedToken),
       decodedSub: payload.sub,
       decodedGrantType: payload.gty,
       decodedExp: payload.exp,
+      decodedIss: payload.iss,
+      tokenSource: inspection.tokenSource,
     };
   }
 
   return {
     reason: 'invalid_signature',
-    message: 'JWT signature is invalid or token was not issued by sample-api',
+    message:
+      'JWT signature is invalid or token was not issued by sample-api or configured Auth0 tenant',
     tokenLength: trimmedToken.length,
     tokenPreview: maskToken(trimmedToken),
     decodedSub: payload.sub,
     decodedGrantType: payload.gty,
     decodedExp: payload.exp,
+    decodedIss: payload.iss,
+    tokenSource: inspection.tokenSource,
   };
 }
 

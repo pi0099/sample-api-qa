@@ -26,7 +26,7 @@ function buildSampleUser(accessToken: string) {
 export async function GET(request: Request): Promise<Response> {
   const endpoint = '/api/getheadertoken';
   const authorization = request.headers.get('Authorization');
-  const diagnosis = diagnoseAccessToken(authorization);
+  const diagnosis = await diagnoseAccessToken(authorization);
   const debugEnabled = isQaDebugEnabled(request);
 
   if (!isValidBearerToken(authorization)) {
@@ -64,8 +64,8 @@ export async function GET(request: Request): Promise<Response> {
 
   const accessToken = extractAccessToken(authorization);
 
-  if (!parseAccessToken(accessToken)) {
-    const diagnosisAfterBearer = diagnoseAccessToken(authorization);
+  if (!(await parseAccessToken(accessToken))) {
+    const diagnosisAfterBearer = await diagnoseAccessToken(authorization);
 
     logRequestEvent({
       endpoint,
@@ -80,6 +80,8 @@ export async function GET(request: Request): Promise<Response> {
         decodedSub: diagnosisAfterBearer.decodedSub,
         decodedGrantType: diagnosisAfterBearer.decodedGrantType,
         decodedExp: diagnosisAfterBearer.decodedExp,
+        decodedIss: diagnosisAfterBearer.decodedIss,
+        tokenSource: diagnosisAfterBearer.tokenSource,
       },
     });
 
@@ -87,7 +89,7 @@ export async function GET(request: Request): Promise<Response> {
       Response.json({
         error: 'invalid_token',
         error_description:
-          'Access token is invalid, expired, or not issued for test-m2m-client',
+          'Access token is invalid, expired, or not issued for an allowed client',
         ...(debugEnabled
           ? {
               debug: {
@@ -98,6 +100,8 @@ export async function GET(request: Request): Promise<Response> {
                 decodedSub: diagnosisAfterBearer.decodedSub,
                 decodedGrantType: diagnosisAfterBearer.decodedGrantType,
                 decodedExp: diagnosisAfterBearer.decodedExp,
+                decodedIss: diagnosisAfterBearer.decodedIss,
+                tokenSource: diagnosisAfterBearer.tokenSource,
               },
             }
           : {}),
@@ -115,6 +119,7 @@ export async function GET(request: Request): Promise<Response> {
       tokenPreview: diagnosis.tokenPreview,
       tokenLength: diagnosis.tokenLength,
       decodedSub: diagnosis.decodedSub,
+      tokenSource: diagnosis.tokenSource,
     },
   });
 
