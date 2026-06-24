@@ -41,17 +41,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: TOOL_NAME,
       description:
-        'Return seeded random order info for a user based on userId and/or email.',
+        'Return seeded random order info. Pass userId or email (same result for same user). Both use the same query/body field style.',
       inputSchema: {
         type: 'object',
         properties: {
           userId: {
             type: 'string',
-            description: 'User identifier used to generate order data',
+            description: 'User id, e.g. alice (same orders as email alice@example.com)',
           },
           email: {
             type: 'string',
-            description: 'User email used to generate order data',
+            description: 'User email, e.g. alice@example.com (same orders as userId alice)',
           },
         },
       },

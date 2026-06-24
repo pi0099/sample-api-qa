@@ -199,10 +199,26 @@ vercel deploy --prod
 
 Return seeded random order info for QA based on `userId` and/or `email`.
 
-At least one of `userId` or `email` is required. Same input always returns the same orders.
+At least one of `userId` or `email` is required. **Cách gọi giống nhau** — đều là query param (GET) hoặc JSON field (POST).
+
+`userId=alice` và `email=alice@example.com` trả về **cùng orders**.
+
+**GET (query param — khuyên dùng):**
 
 ```bash
-curl "https://sample-api-qa.vercel.app/api/orderinfo?userId=user-123"
+curl "https://sample-api-qa.vercel.app/api/orderinfo?userId=alice"
+
+curl "https://sample-api-qa.vercel.app/api/orderinfo?email=alice@example.com"
+
+curl "https://sample-api-qa.vercel.app/api/orderinfo?userId=alice&email=alice@example.com"
+```
+
+**POST (JSON body — cùng field name):**
+
+```bash
+curl -X POST "https://sample-api-qa.vercel.app/api/orderinfo" \
+  -H "Content-Type: application/json" \
+  -d '{"userId":"alice"}'
 
 curl -X POST "https://sample-api-qa.vercel.app/api/orderinfo" \
   -H "Content-Type: application/json" \
@@ -275,19 +291,17 @@ Example file: `mcp-server/cursor.mcp.json`
 
 ### Tool input
 
-```json
-{
-  "userId": "user-123"
-}
-```
-
-or
+Both fields work the same way — provide **one** of them:
 
 ```json
-{
-  "email": "alice@example.com"
-}
+{ "userId": "alice" }
 ```
+
+```json
+{ "email": "alice@example.com" }
+```
+
+`userId=alice` and `email=alice@example.com` return the same orders.
 
 Returns the same JSON shape as `/api/orderinfo`.
 

@@ -80,14 +80,46 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+function normalizeUserKey(value: string): string {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  return normalized || 'user';
+}
+
+function emailLocalPart(email: string): string {
+  return normalizeEmail(email).split('@')[0] ?? 'user';
+}
+
 function buildSyntheticEmail(userId: string): string {
-  const slug = userId.trim().toLowerCase().replace(/[^a-z0-9]+/g, '.');
+  const slug = normalizeUserKey(userId).replace(/-+/g, '.');
   return `${slug || 'user'}@example.com`;
 }
 
 function buildSyntheticUserId(email: string): string {
-  const localPart = normalizeEmail(email).split('@')[0] ?? 'user';
-  return localPart.replace(/[^a-z0-9]+/gi, '-');
+  return normalizeUserKey(emailLocalPart(email));
+}
+
+function buildSeedKey(userId?: string, email?: string): string {
+  if (userId && email) {
+    const userKey = normalizeUserKey(userId);
+    const emailKey = normalizeUserKey(emailLocalPart(email));
+
+    if (userKey === emailKey) {
+      return userKey;
+    }
+
+    return `${userKey}|${normalizeEmail(email)}`;
+  }
+
+  if (userId) {
+    return normalizeUserKey(userId);
+  }
+
+  return normalizeUserKey(emailLocalPart(email ?? 'user'));
 }
 
 export function resolveOrderLookup(input: OrderInfoInput): {
@@ -102,26 +134,14 @@ export function resolveOrderLookup(input: OrderInfoInput): {
     throw new Error('Either userId or email is required');
   }
 
-  if (userId && email) {
-    return {
-      userId,
-      email,
-      seedKey: `${userId}|${email}`,
-    };
-  }
-
-  if (userId) {
-    return {
-      userId,
-      email: buildSyntheticEmail(userId),
-      seedKey: userId,
-    };
-  }
+  const resolvedUserId = userId ?? buildSyntheticUserId(email ?? 'user');
+  const resolvedEmail = email ?? buildSyntheticEmail(resolvedUserId);
+  const seedKey = buildSeedKey(userId, email);
 
   return {
-    userId: buildSyntheticUserId(email ?? 'user'),
-    email: email ?? 'user@example.com',
-    seedKey: email ?? 'user@example.com',
+    userId: resolvedUserId,
+    email: resolvedEmail,
+    seedKey,
   };
 }
 
