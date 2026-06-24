@@ -14,6 +14,11 @@ const endpoints = [
     path: '/api/orderinfo',
     description: 'Return seeded random order info by userId or email',
   },
+  {
+    method: 'GET',
+    path: '/api/order',
+    description: 'Return a single order by orderId query param',
+  },
 ];
 
 export default function HomePage() {

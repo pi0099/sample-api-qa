@@ -190,22 +190,48 @@ function buildCreatedAt(random: () => number): string {
   return date.toISOString();
 }
 
-function buildOrder(orderIndex: number, random: () => number): OrderInfo {
+function buildOrderDetails(orderId: string): OrderInfo {
+  const random = createSeededRandom(hashString(orderId));
   const items = buildOrderItems(random);
   const total = roundMoney(
     items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
   );
 
-  const orderNumber = 100000 + Math.floor(random() * 899999);
-
   return {
-    orderId: `ORD-${orderNumber}-${orderIndex + 1}`,
+    orderId,
     status: pickOrderStatus(random),
     total,
     currency: 'USD',
     items,
     createdAt: buildCreatedAt(random),
   };
+}
+
+function buildOrder(orderIndex: number, random: () => number): OrderInfo {
+  const orderNumber = 100000 + Math.floor(random() * 899999);
+  const orderId = `ORD-${orderNumber}-${orderIndex + 1}`;
+
+  return buildOrderDetails(orderId);
+}
+
+const ORDER_ID_PATTERN = /^ORD-\d+-\d+$/;
+
+export function normalizeOrderId(orderId: string): string {
+  return orderId.trim().toUpperCase();
+}
+
+export function isValidOrderId(orderId: string): boolean {
+  return ORDER_ID_PATTERN.test(normalizeOrderId(orderId));
+}
+
+export function getOrderById(orderId: string): OrderInfo {
+  const normalized = normalizeOrderId(orderId);
+
+  if (!isValidOrderId(normalized)) {
+    throw new Error('Invalid orderId format. Expected ORD-<number>-<index>');
+  }
+
+  return buildOrderDetails(normalized);
 }
 
 export function getOrderInfo(input: OrderInfoInput): OrderInfoResponse {

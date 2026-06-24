@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "mcp:orderinfo": "tsx mcp-server/index.ts",
-    "test:tokens": "tsx --test lib/token-verify.test.ts"
+    "test:tokens": "tsx --test lib/token-verify.test.ts",
+    "test:orders": "tsx --test lib/order-info.test.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.4",

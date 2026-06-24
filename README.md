@@ -223,6 +223,44 @@ npm run dev
 vercel deploy --prod
 ```
 
+### `GET /api/order`
+
+Return a single order by `orderId`. No auth required.
+
+**Request:**
+
+```bash
+# 1) List orders for a user
+curl "https://sample-api-qa.vercel.app/api/orderinfo?userId=alice"
+
+# 2) Get one order by id from the list
+curl "https://sample-api-qa.vercel.app/api/order?orderId=ORD-123456-1"
+```
+
+**Response 200:**
+
+```json
+{
+  "orderId": "ORD-123456-1",
+  "status": "shipped",
+  "total": 149.97,
+  "currency": "USD",
+  "items": [
+    {
+      "sku": "SKU-1001",
+      "name": "Wireless Mouse",
+      "quantity": 2,
+      "unitPrice": 29.99
+    }
+  ],
+  "createdAt": "2025-03-15T10:30:00.000Z"
+}
+```
+
+**Response 400** — missing or invalid `orderId` (expected format `ORD-<number>-<index>`).
+
+Order details are deterministic per `orderId` and match the same id returned from `/api/orderinfo`.
+
 ### `GET/POST /api/orderinfo`
 
 Return seeded random order info for QA based on `userId` and/or `email`.
