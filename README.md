@@ -194,3 +194,100 @@ npm run dev
 ```bash
 vercel deploy --prod
 ```
+
+### `GET/POST /api/orderinfo`
+
+Return seeded random order info for QA based on `userId` and/or `email`.
+
+At least one of `userId` or `email` is required. Same input always returns the same orders.
+
+```bash
+curl "https://sample-api-qa.vercel.app/api/orderinfo?userId=user-123"
+
+curl -X POST "https://sample-api-qa.vercel.app/api/orderinfo" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alice@example.com"}'
+```
+
+**Response 200:**
+
+```json
+{
+  "userId": "user-123",
+  "email": "user.123@example.com",
+  "orderCount": 3,
+  "orders": [
+    {
+      "orderId": "ORD-482913-1",
+      "status": "shipped",
+      "total": 189.97,
+      "currency": "USD",
+      "items": [
+        {
+          "sku": "SKU-1004",
+          "name": "27-inch Monitor",
+          "quantity": 1,
+          "unitPrice": 249
+        }
+      ],
+      "createdAt": "2026-03-12T08:15:00.000Z"
+    }
+  ]
+}
+```
+
+## MCP tool: `get_order_info`
+
+Local MCP server for Cursor/chatbot testing.
+
+### Install
+
+```bash
+cd docs/qa/Sample_API
+npm install
+```
+
+### Run MCP server
+
+```bash
+npm run mcp:orderinfo
+```
+
+### Cursor config
+
+Add to Cursor MCP settings (update the absolute path if needed):
+
+```json
+{
+  "mcpServers": {
+    "sample-api-orderinfo": {
+      "command": "npx",
+      "args": [
+        "tsx",
+        "/Users/nhauyen/Axis/stss/docs/qa/Sample_API/mcp-server/index.ts"
+      ]
+    }
+  }
+}
+```
+
+Example file: `mcp-server/cursor.mcp.json`
+
+### Tool input
+
+```json
+{
+  "userId": "user-123"
+}
+```
+
+or
+
+```json
+{
+  "email": "alice@example.com"
+}
+```
+
+Returns the same JSON shape as `/api/orderinfo`.
+

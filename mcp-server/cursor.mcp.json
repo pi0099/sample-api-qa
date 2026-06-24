@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "sample-api-orderinfo": {
+      "command": "npx",
+      "args": [
+        "tsx",
+        "/Users/nhauyen/Axis/stss/docs/qa/Sample_API/mcp-server/index.ts"
+      ]
+    }
+  }
+}

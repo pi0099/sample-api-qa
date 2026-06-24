@@ -9,6 +9,11 @@ const endpoints = [
     path: '/api/getheadertoken',
     description: 'Protected resource — return sample user info (userId = token + LamPi)',
   },
+  {
+    method: 'GET/POST',
+    path: '/api/orderinfo',
+    description: 'Return seeded random order info by userId or email',
+  },
 ];
 
 export default function HomePage() {
