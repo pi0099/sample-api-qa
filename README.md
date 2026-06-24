@@ -103,7 +103,7 @@ curl -H "Authorization: Bearer <access_token>" \
 |----------|--------|
 | `AUTH0_DOMAIN` | `dev-ypchc5lcafidxfot.us.auth0.com` |
 | `AUTH0_AUDIENCE` | `https://dev-ypchc5lcafidxfot.us.auth0.com/api/v2/` |
-| `AUTH0_ALLOWED_CLIENT_IDS` | `9iRZSYd9RctbwlYmDUFHGq79tdEV255b6` |
+| `AUTH0_ALLOWED_CLIENT_IDS` | `9iRZSYd9RctbwlYmDUFHq79tdEV255b6` |
 
 `AUTH0_AUDIENCE` và `AUTH0_ALLOWED_CLIENT_IDS` phải **khớp chính xác** với JWT từ Auth0 (decode trên jwt.io để kiểm tra `aud`, `sub`, `azp`).
 

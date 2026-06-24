@@ -48,7 +48,7 @@ function audienceMatches(
   return tokenAudience.includes(expectedAudience);
 }
 
-function isAllowedAuth0Client(
+export function isAllowedAuth0Client(
   payload: AccessTokenPayload,
   allowedClientIds: string[],
 ): boolean {
@@ -140,23 +140,40 @@ function verifyJwtWithPublicKey(
   return payload;
 }
 
+export type Auth0ClaimFailure =
+  | 'wrong_issuer'
+  | 'wrong_audience'
+  | 'wrong_grant_type'
+  | 'wrong_client';
+
+export function getAuth0ClaimFailure(
+  payload: AccessTokenPayload,
+  config: Auth0Config,
+): Auth0ClaimFailure | null {
+  if (!isAuth0Issuer(payload.iss, config)) {
+    return 'wrong_issuer';
+  }
+
+  if (!audienceMatches(payload.aud, config.audience)) {
+    return 'wrong_audience';
+  }
+
+  if (payload.gty !== 'client-credentials') {
+    return 'wrong_grant_type';
+  }
+
+  if (!isAllowedAuth0Client(payload, config.allowedClientIds)) {
+    return 'wrong_client';
+  }
+
+  return null;
+}
+
 export function isAuth0AccessTokenPayload(
   payload: AccessTokenPayload,
   config: Auth0Config,
 ): boolean {
-  if (!isAuth0Issuer(payload.iss, config)) {
-    return false;
-  }
-
-  if (!audienceMatches(payload.aud, config.audience)) {
-    return false;
-  }
-
-  if (payload.gty !== 'client-credentials') {
-    return false;
-  }
-
-  return isAllowedAuth0Client(payload, config.allowedClientIds);
+  return getAuth0ClaimFailure(payload, config) === null;
 }
 
 export async function verifyAuth0AccessToken(

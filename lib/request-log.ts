@@ -1,5 +1,5 @@
 import { getAuth0Config, isAuth0Issuer } from '@/lib/auth0-config';
-import { isAuth0AccessTokenPayload } from '@/lib/auth0-jwks';
+import { getAuth0ClaimFailure } from '@/lib/auth0-jwks';
 import {
   inspectAccessToken,
   parseAccessToken,
@@ -20,6 +20,7 @@ export type TokenRejectReason =
   | 'wrong_sub'
   | 'wrong_issuer'
   | 'wrong_audience'
+  | 'wrong_client'
   | 'auth0_not_configured'
   | 'expired'
   | 'valid';
@@ -196,24 +197,19 @@ export async function diagnoseAccessToken(
       };
     }
 
-    if (!isAuth0AccessTokenPayload(payload, auth0Config)) {
-      if (payload.gty !== 'client-credentials') {
-        return {
-          reason: 'wrong_grant_type',
-          message: `Expected gty=client-credentials, got ${payload.gty ?? 'undefined'}`,
-          tokenLength: trimmedToken.length,
-          tokenPreview: maskToken(trimmedToken),
-          decodedSub: payload.sub,
-          decodedGrantType: payload.gty,
-          decodedExp: payload.exp,
-          decodedIss: payload.iss,
-          tokenSource: 'auth0',
-        };
-      }
+    const claimFailure = getAuth0ClaimFailure(payload, auth0Config);
+
+    if (claimFailure) {
+      const failureMessages: Record<typeof claimFailure, string> = {
+        wrong_issuer: `Expected Auth0 issuer ${auth0Config.issuer}, got ${payload.iss}`,
+        wrong_audience: `Expected aud=${auth0Config.audience}, got ${JSON.stringify(payload.aud)}`,
+        wrong_grant_type: `Expected gty=client-credentials, got ${payload.gty ?? 'undefined'}`,
+        wrong_client: `Client not allowed. Set AUTH0_ALLOWED_CLIENT_IDS to token azp=${payload.azp ?? 'undefined'} (configured: ${auth0Config.allowedClientIds.join(', ')})`,
+      };
 
       return {
-        reason: 'wrong_audience',
-        message: `Auth0 audience or client is not allowed (expected aud=${auth0Config.audience})`,
+        reason: claimFailure,
+        message: failureMessages[claimFailure],
         tokenLength: trimmedToken.length,
         tokenPreview: maskToken(trimmedToken),
         decodedSub: payload.sub,
